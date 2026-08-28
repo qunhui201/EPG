@@ -1,0 +1,40 @@
+name: tbc_epg
+
+on:
+  schedule:
+    - cron: '21 21 * * *'   # 每天 UTC 21:00 (台北 05:00)
+  workflow_dispatch:
+
+jobs:
+  generate-epg:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 檢出程式碼
+        uses: actions/checkout@v4
+
+      - name: 設定 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: 安裝相依套件
+        run: |
+          pip install requests beautifulsoup4 pytz loguru urllib3
+          # 若需要 SOCKS5 代理，請取消下面註解
+          # pip install 'requests[socks]'
+
+      - name: 執行 EPG 抓取腳本
+        env:
+          HTTP_PROXY: ${{ secrets.HTTP_PROXY }}
+          HTTPS_PROXY: ${{ secrets.HTTPS_PROXY }}
+          SOCKS5_PROXY: ${{ secrets.SOCKS5_PROXY }}
+          OUTPUT_DIR: ./output      # 相對於工作空間的目錄
+        run: python scripts/tbc.py
+
+      - name: Commit and Push EPG
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add output/epg_tbc.xml
+          git commit -m "Auto-update TBC EPG" || echo "No changes to commit"
+          git push

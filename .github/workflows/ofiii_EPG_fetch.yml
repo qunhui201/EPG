@@ -1,0 +1,73 @@
+name: Daily ofiii EPG Update
+
+on:
+  schedule:
+    - cron: '0 18 * * *'
+  workflow_dispatch:
+
+jobs:
+  generate-epg:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install requests beautifulsoup4 pytz
+        pip list
+        
+    - name: Create output directory
+      run: mkdir -p output
+      
+    - name: Generate EPG
+      run: |
+        echo "開始生成EPG數據..."
+        python scripts/ofiii_epg.py --output output/ofiii.xml
+        echo "EPG生成完成"
+        
+    - name: Verify generated files
+      run: |
+        echo "檢查生成的文件:"
+        ls -la output/
+        echo "XML 文件大小: $(wc -c < output/ofiii.xml) 字節"
+        if [ -f "output/ofiii.json" ]; then
+          echo "JSON 文件大小: $(wc -c < output/ofiii.json) 字節"
+          echo "JSON 文件前幾個字符:"
+          head -c 200 output/ofiii.json
+        else
+          echo "❌ JSON 文件未生成"
+          exit 1
+        fi
+        
+    - name: Configure Git
+      run: |
+        git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        git config --local user.name "GitHub Actions"
+        
+    - name: Commit and push EPG data
+      run: |
+        # 添加生成的檔案
+        git add output/ofiii.xml output/ofiii.json
+        
+        # 檢查是否有變更
+        if git diff --staged --quiet; then
+          echo "沒有EPG數據變更"
+        else
+          # 提交變更
+          git commit -m "Auto-update EPG data [$(date +'%Y-%m-%d %H:%M')]"
+          
+          # 推送變更
+          git push
+          echo "✅ EPG數據已成功更新並推送"
+        fi

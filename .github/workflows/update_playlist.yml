@@ -1,0 +1,60 @@
+name: Update 4GTV Playlist
+
+on:
+  schedule:
+    # 每4小时运行一次（UTC时间）
+    #- cron: '0 */4 * * *'
+  workflow_dispatch:  # 允许手动触发
+
+jobs:
+  update-playlist:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install cloudscraper pycryptodome requests urllib3 bcrypt pysocks requests[socks]
+
+    - name: Create directories
+      run: |
+        mkdir -p scripts
+        mkdir -p playlist
+
+    - name: Generate playlist
+      env:
+        # 账号密码（建议在 GitHub Secrets 中配置）
+        GTV_USER: ${{ secrets.GTV_USER }}
+        GTV_PASS: ${{ secrets.GTV_PASS }}
+        # 通用代理（HTTP/HTTPS/SOCKS5/SOCKS5h）
+        HTTP_PROXY:  ${{ secrets.HTTP_PROXY }}
+        HTTPS_PROXY: ${{ secrets.HTTPS_PROXY }}
+        SOCKS5_PROXY:  ${{ secrets.SOCKS5_PROXY }}
+        SOCKS5H_PROXY: ${{ secrets.SOCKS5H_PROXY }}
+        ALL_PROXY:     ${{ secrets.ALL_PROXY }}
+        # 如果使用 SOCKS 代理，建议同时设置 NO_PROXY 避免内网冲突（可选）
+        NO_PROXY: ${{ secrets.NO_PROXY }}
+      run: |
+        python scripts/4g_m3u8.py --generate-playlist \
+          --delay 1 \
+          --retries 3 \
+          --timeout 30
+
+    - name: Commit and push if changed
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add playlist/4gtv.m3u
+        git diff --staged --quiet || git commit -m "Update 4GTV playlist - $(date +'%Y-%m-%d %H:%M:%S')"
+        git push

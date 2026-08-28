@@ -1,0 +1,41 @@
+name: Generate ofiii-M3U Playlist and Channel Data
+
+on:
+  schedule:
+    # 每天運行
+    - cron: '0 0 * * *'  # 每天運行
+  workflow_dispatch: # 允許手動觸發
+
+jobs:
+  generate-m3u:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.12'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install requests beautifulsoup4
+        
+    - name: Create output directory
+      run: mkdir -p output
+      
+    - name: Generate M3U playlist and channel data
+      run: |
+        cd scripts
+        python generate_ofiii_m3u.py
+        
+    - name: Commit and push if changed
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add output/
+        git diff --staged --quiet || git commit -m "Update M3U playlist and channel data - $(date)"
+        git push

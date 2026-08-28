@@ -1,0 +1,5 @@
+requests
+pytz
+loguru
+httpx>=0.25.0
+aiohttp>=3.9.0

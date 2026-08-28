@@ -1,0 +1,105 @@
+name: LiTV EPG Daily Crawler
+
+on:
+  schedule:
+    # 每日 UTC 時間 12:00 (台灣時間 20:00) 執行
+    - cron: '0 08 * * *'
+  workflow_dispatch:  # 允許手動觸發
+  #push:
+    #branches: [ main ]
+    #paths:
+      #- 'scripts/**'
+
+jobs:
+  crawl-epg:
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: write  # 給予寫入倉庫的權限
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+        cache: 'pip'
+
+    - name: Install dependencies
+      run: |
+        cd scripts
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Run EPG crawler
+      run: |
+        cd scripts
+        python litv_github.py
+      continue-on-error: true
+
+    - name: Check if output file exists
+      id: check_file
+      run: |
+        if [ -f "scripts/output/litv.xml" ]; then
+          echo "file_exists=true" >> $GITHUB_OUTPUT
+          echo "file_size=$(wc -c < scripts/output/litv.xml)" >> $GITHUB_OUTPUT
+          echo "File exists with size: $(ls -lh scripts/output/litv.xml | awk '{print $5}')"
+        else
+          echo "file_exists=false" >> $GITHUB_OUTPUT
+          echo "file_size=0" >> $GITHUB_OUTPUT
+          echo "Output file not found!"
+        fi
+
+    - name: Upload EPG file as artifact
+      if: steps.check_file.outputs.file_exists == 'true'
+      uses: actions/upload-artifact@v4
+      with:
+        name: litv-epg
+        path: scripts/output/litv.xml
+        retention-days: 7
+
+    - name: Commit and push if file changed
+      if: steps.check_file.outputs.file_exists == 'true' && steps.check_file.outputs.file_size > 0
+      run: |
+        # 配置 Git
+        git config --local user.email "github-actions[bot]@users.noreply.github.com"
+        git config --local user.name "github-actions[bot]"
+        
+        # 建立或清空輸出目錄
+        mkdir -p output
+        
+        # 複製檔案
+        cp scripts/output/litv.xml output/
+        
+        # 檢查檔案是否與上次提交不同
+        if git diff --quiet HEAD output/litv.xml 2>/dev/null; then
+          echo "No changes to commit"
+        else
+          # 添加和提交
+          git add output/litv.xml
+          git commit -m "Auto-update: LiTV EPG data $(date -u +'%Y-%m-%d %H:%M:%S') UTC"
+          
+          # 推送更改
+          git push
+        fi
+
+    - name: Send success notification
+      if: success()
+      run: |
+        echo "🎉 LiTV EPG 更新成功!"
+        echo "📅 更新時間: $(date -u +'%Y-%m-%d %H:%M:%S') UTC"
+        if [ -f "scripts/output/litv.xml" ]; then
+          echo "📁 檔案: output/litv.xml"
+          echo "📊 檔案大小: $(ls -lh scripts/output/litv.xml | awk '{print $5}')"
+        fi
+
+    - name: Send failure notification
+      if: failure()
+      run: |
+        echo "❌ LiTV EPG 更新失敗!"
+        echo "📅 失敗時間: $(date -u +'%Y-%m-%d %H:%M:%S') UTC"
+        echo "請檢查 GitHub Actions 日誌以獲取詳細信息。"

@@ -1,0 +1,36 @@
+name: Daily Hani EPG Update
+
+on:
+  schedule:
+    - cron: '0 0 * * *'  # 每天 UTC 時間 00:00 執行（台北時間 08:00）
+  workflow_dispatch:     # 允許手動觸發
+
+jobs:
+  generate-epg:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60  # 設置更長的超時時間
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+          
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests pytz loguru
+          
+      - name: Run EPG Generator
+        run: python scripts/Hami.py
+        
+      - name: Commit and Push EPG
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add output/hami.xml
+          git commit -m "Auto-update Hami EPG" || echo "No changes to commit"
+          git push
