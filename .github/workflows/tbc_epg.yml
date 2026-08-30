@@ -1,8 +1,7 @@
 name: tbc_epg
 
 on:
-  schedule:
-    - cron: '21 21 * * *'   # 每天 UTC 21:00 (台北 05:00)
+
   workflow_dispatch:
 
 jobs:
